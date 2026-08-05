@@ -237,41 +237,32 @@
     display: none;
   }
   .live-rec.on { display: block }
+  /* بطاقة صغيرة على يمين الشاشة: الوقت فقط + زر إيقاف مضغوط بداخلها */
   .lr-clock {
-    position: fixed; top: 50%; right: 26px; transform: translateY(-50%);
-    pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 10px;
-    background: rgba(31,28,58,.94); border: 1px solid var(--line); border-radius: 20px;
-    padding: 18px 16px; box-shadow: 0 16px 44px rgba(0,0,0,.5); backdrop-filter: blur(8px);
+    position: fixed; top: 50%; right: 20px; transform: translateY(-50%);
+    pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 8px;
+    background: rgba(31,28,58,.95); border: 1px solid var(--line); border-radius: 16px;
+    padding: 14px 14px; box-shadow: 0 14px 36px rgba(0,0,0,.5); backdrop-filter: blur(8px);
+    min-width: 128px;
   }
   .lr-time { font-size: 30px; font-weight: 800; letter-spacing: -.5px; line-height: 1 }
   .lr-time.ok { color: var(--teal) }
   .lr-time.low { color: var(--fg-2) }
   .lr-time.over { color: var(--rose) }
   .lr-target { font-size: 10.5px; color: var(--fg-3); text-align: center; line-height: 1.5 }
-  .lr-live { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--rose) }
+  .lr-live { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--rose) }
   .lr-stop {
-    position: fixed; top: 50%; left: 26px; transform: translateY(-50%);
-    pointer-events: auto; all: unset; cursor: pointer;
-    width: 116px; height: 116px; border-radius: 50%;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-    background: linear-gradient(140deg, #fb7185, #e11d48); color: #fff;
-    font-size: 15px; font-weight: 800;
-    box-shadow: 0 14px 40px rgba(225,29,72,.45);
+    all: unset; cursor: pointer; margin-top: 2px;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 8px 16px; border-radius: 999px; width: 100%; box-sizing: border-box;
+    background: var(--rose); color: #2a0a12; font-size: 12.5px; font-weight: 700;
   }
   .lr-stop:hover { filter: brightness(1.08) }
-  .lr-stop:focus-visible { outline: 4px solid #fff; outline-offset: 3px }
-  .lr-stop svg { width: 26px; height: 26px }
-  .lr-cam {
-    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
-    width: 200px; border-radius: 14px; background: #000; pointer-events: auto;
-    border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0,0,0,.5); display: none;
-  }
-  .lr-cam.on { display: block }
+  .lr-stop:focus-visible { outline: 2px solid #fff; outline-offset: 2px }
+  .lr-stop svg { width: 12px; height: 12px }
   @media (max-width: 820px) {
-    .lr-clock { right: 12px; padding: 12px 11px }
+    .lr-clock { right: 10px; padding: 11px 11px; min-width: 108px }
     .lr-time { font-size: 24px }
-    .lr-stop { left: 12px; width: 92px; height: 92px; font-size: 13px }
-    .lr-cam { width: 132px; bottom: 14px }
   }
 
   ::-webkit-scrollbar { width: 9px }
@@ -332,12 +323,11 @@
     <div class="lr-live"><span class="rd on"></span> تسجيل</div>
     <div class="lr-time" id="lrTime">00:00</div>
     <div class="lr-target" id="lrTarget"></div>
+    <button class="lr-stop" id="lrStop">
+      <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      إيقاف
+    </button>
   </div>
-  <button class="lr-stop" id="lrStop">
-    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-    إيقاف
-  </button>
-  <video class="lr-cam" id="lrCam" autoplay muted playsinline></video>
 </div>
 
 <aside>
@@ -387,7 +377,6 @@
   var lrTime = document.getElementById("lrTime");
   var lrTarget = document.getElementById("lrTarget");
   var lrStop = document.getElementById("lrStop");
-  var lrCam = document.getElementById("lrCam");
 
   lrStop.addEventListener("click", function () { if (rec.stopFn) rec.stopFn(); });
 
@@ -825,7 +814,7 @@
     p.appendChild(cam); p.appendChild(st); p.appendChild(row); extra.appendChild(p);
     bk.addEventListener("click", function () {
       if (rec.timer) clearInterval(rec.timer);
-      liveRec.classList.remove("on"); lrCam.classList.remove("on"); lrCam.srcObject = null;
+      liveRec.classList.remove("on");
       stopTracks(); extra.innerHTML = "";
     });
 
@@ -859,7 +848,7 @@
           rec.vr.start();
 
           rec.secs = 0;
-          st.innerHTML = '<span class="rd on"></span><span>التسجيل جارٍ — استخدم زر الإيقاف الكبير على يسار الشاشة</span>';
+          st.innerHTML = '<span class="rd on"></span><span>التسجيل جارٍ — الوقت يظهر على يمين الشاشة</span>';
 
           // تفعيل الشريط العائم: المؤقت يميناً وزر الإيقاف يساراً، ثابتان دائماً
           var impromptu = tp.value.indexOf("ارتجالي") !== -1;
@@ -867,7 +856,6 @@
           lrTime.textContent = "00:00";
           lrTime.className = "lr-time low";
           liveRec.classList.add("on");
-          if (kind === "video") { lrCam.srcObject = s; lrCam.classList.add("on"); }
 
           function tickClock() {
             rec.secs++;
@@ -889,8 +877,6 @@
           rec.stopFn = function () {
             clearInterval(rec.timer);
             liveRec.classList.remove("on");
-            lrCam.classList.remove("on");
-            lrCam.srcObject = null;
             if (rec.ar && rec.ar.state !== "inactive") rec.ar.stop();
             if (rec.vr.state !== "inactive") rec.vr.stop();
           };
