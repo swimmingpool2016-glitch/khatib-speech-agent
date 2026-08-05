@@ -489,6 +489,21 @@
 
   function via(url) { return "/api/status?url=" + encodeURIComponent(url); }
 
+  // n8n renders the finished result on the waiting page itself.
+  // Newer builds use .header h1/p; older ones use #submitted-header/#submitted-content.
+  function readResultPage(url) {
+    return fetch(via(url))
+      .then(function (r) { return r.text(); })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, "text/html");
+        var body = doc.querySelector("#submitted-content") || doc.querySelector(".header p") || doc.querySelector(".card p");
+        var head = doc.querySelector("#submitted-header") || doc.querySelector(".header h1") || doc.querySelector(".card h1");
+        var text = body ? body.textContent.trim() : "";
+        if (text) return text;
+        return head ? head.textContent.trim() : "اكتمل التنفيذ بدون محتوى معروض.";
+      });
+  }
+
   function poll(waitingUrl) {
     var w = new URL(waitingUrl);
     var sig = w.searchParams.get("signature");
@@ -500,27 +515,20 @@
     var deadline = Date.now() + 6 * 60 * 1000;
 
     function tick() {
-      if (Date.now() > deadline) throw new Error("استغرق التحليل وقتاً أطول من المتوقع. راجع سجل التنفيذ في n8n.");
+      if (Date.now() > deadline) throw new Error("استغرق التنفيذ وقتاً أطول من المتوقع. راجع سجل التنفيذ في n8n.");
       return sleep(wait)
         .then(function () { return fetch(via(st.toString())); })
         .then(function (r) { return r.text(); })
         .then(function (raw) {
           var t = raw.trim();
-          if (t === "success") {
-            return fetch(via(w.toString()))
-              .then(function (r) { return r.text(); })
-              .then(function (html) {
-                var doc = new DOMParser().parseFromString(html, "text/html");
-                var c = doc.getElementById("submitted-content");
-                var h = doc.getElementById("submitted-header");
-                var body = c ? c.textContent.trim() : "";
-                if (body) return body;
-                return h ? h.textContent.trim() : "اكتمل التحليل.";
-              });
-          }
+
+          // "form-waiting" و "success" كلاهما يعني أن النتيجة صارت جاهزة على صفحة الانتظار
+          if (t === "form-waiting" || t === "success") return readResultPage(w.toString());
+
           if (["canceled", "crashed", "error", "null"].indexOf(t) !== -1) {
-            throw new Error("تعطّل تنفيذ التحليل (" + t + "). راجع سجل التنفيذ في n8n للتفاصيل.");
+            throw new Error("تعطّل التنفيذ داخل n8n (" + t + "). افتح سجل التنفيذ في n8n لمعرفة العقدة المتعطلة.");
           }
+
           wait = Math.round(wait * 1.15);
           return tick();
         });
