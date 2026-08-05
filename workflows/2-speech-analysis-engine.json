@@ -1,0 +1,192 @@
+{
+  "name": "محرك تحليل الخطابة",
+  "nodes": [
+    {
+      "id": "f718869d-8b16-49a5-bfc9-a810b69bf3eb",
+      "name": "استلام الخطاب",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [-680, 0],
+      "webhookId": "c8a16cff-7ecf-4a35-b5b6-98ac607b8156",
+      "parameters": {
+        "formTitle": "🎙️ محرك تحليل الخطابة",
+        "formDescription": "ارفع تسجيل خطابك (صوت أو فيديو) وسيقوم النظام بتحليله وإصدار تقرير كامل. ملاحظة: النظام لا يحتفظ بالتسجيل نفسه إطلاقاً — فقط بالتقرير التحليلي، ويُفضّل أن تكون مدة التسجيل أقل من 3 دقائق لضمان استقرار المعالجة.",
+        "formFields": {
+          "values": [
+            { "fieldLabel": "اسم المتحدث", "fieldType": "text", "requiredField": true },
+            {
+              "fieldLabel": "نوع الخطاب",
+              "fieldType": "dropdown",
+              "fieldOptions": { "values": [{ "option": "ارتجالي" }, { "option": "معد" }, { "option": "مفتوح" }] },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "موضوع الخطاب (إن وجد)",
+              "fieldType": "text",
+              "placeholder": "اتركه فارغاً إن كان ارتجالياً بدون موضوع محدد",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "تسجيل الخطاب",
+              "fieldType": "file",
+              "requiredField": true,
+              "multipleFiles": false,
+              "acceptFileTypes": ".mp3,.wav,.m4a,.aac,.ogg,.mp4,.mov,.webm,.m4v"
+            },
+            { "fieldLabel": "ملاحظات إضافية", "fieldType": "textarea", "requiredField": false }
+          ]
+        },
+        "options": {
+          "buttonLabel": "ابدأ التحليل",
+          "appendAttribution": false,
+          "customCss": ":root {\n  --font-family: 'Segoe UI', Tahoma, Arial, sans-serif;\n  --color-background: #212121;\n  --color-card-bg: #2f2f2f;\n  --color-card-border: #4b4b4b;\n  --color-header: #ececec;\n  --color-label: #b4b4b4;\n  --color-input-border: #565869;\n  --color-input-text: #ececec;\n  --color-input-bg: #303030;\n  --color-focus-border: #d97757;\n  --color-submit-btn-bg: #d97757;\n  --color-submit-btn-text: #ffffff;\n  --border-radius-card: 16px;\n  --border-radius-input: 10px;\n  --padding-card: 28px;\n  --container-width: 560px;\n}"
+        }
+      }
+    },
+    {
+      "id": "1044f4f4-309b-4b6e-8a5d-a3349a0c3369",
+      "name": "تجهيز الملف",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-460, 0],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const item = $input.item;\nconst j = item.json;\n\nconst binaryKeys = Object.keys(item.binary || {});\nif (binaryKeys.length === 0) {\n  throw new Error('لم يتم استلام أي ملف. تأكد من رفع تسجيل صوتي أو مرئي في النموذج.');\n}\nconst bin = item.binary[binaryKeys[0]];\nconst mimeType = (bin.mimeType || '').toLowerCase();\nconst isVideo = mimeType.startsWith('video/');\n\nreturn {\n  json: {\n    speakerName: j['اسم المتحدث'] || '',\n    speechType: j['نوع الخطاب'] || '',\n    topic: j['موضوع الخطاب (إن وجد)'] || 'غير محدد',\n    notes: j['ملاحظات إضافية'] || 'لا يوجد',\n    isVideo,\n    inputMode: isVideo ? 'video' : 'audio',\n    inputModeLabel: isVideo ? 'فيديو (المسار الحالي يحلّل الصوت فقط)' : 'صوت فقط',\n    detectedMimeType: mimeType,\n  },\n  binary: {\n    file: bin,\n  },\n};"
+      }
+    },
+    {
+      "id": "4fd3df15-6260-4126-919e-583f90a6191c",
+      "name": "OpenAI - تفريغ النص",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [-240, 0],
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "binaryPropertyName": "file",
+        "options": { "language": "ar" }
+      }
+    },
+    {
+      "id": "81087ed6-1bdf-457f-8876-3eecdd26e897",
+      "name": "OpenAI - التحليل اللفظي وغير اللفظي",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [-20, 0],
+      "parameters": {
+        "resource": "text",
+        "operation": "response",
+        "modelId": { "__rl": true, "mode": "id", "value": "gpt-4o" },
+        "responses": {
+          "values": [
+            {
+              "type": "text",
+              "role": "user",
+              "content": "=أنت خبير عالمي في تحليل الخطابة والتواصل، بخبرة 20 عاماً في تدريب المتحدثين. لديك تفريغ نصي لخطاب من نوع: {{ $('تجهيز الملف').item.json.speechType }}. الموضوع: {{ $('تجهيز الملف').item.json.topic }}. نمط الملف الأصلي: {{ $('تجهيز الملف').item.json.inputModeLabel }}.\n\nنص الخطاب المفرّغ:\n{{ $json.text || $json.content || $json.transcript }}\n\nملاحظة مهمة: هذا التحليل مبني على النص الصوتي المفرّغ فقط، بدون معالجة بصرية لأي فيديو، لذا أي تقييم للغة الجسد أو التواصل البصري أو حركة اليدين أو تعابير الوجه يجب أن يكون نصه الحرفي: غير متاح (يتطلب تحليلاً بصرياً غير مفعّل في هذا الإعداد)، ولا تحاول تخمينه إطلاقاً.\n\nالمطلوب تحليل دقيق للرسالة اللفظية: احسب تقريبياً عدد التلكؤات وكلمات الحشو (مثل: يعني، اه، امم) بالاستناد للنص، ودقّق لغوياً ونحوياً، وقيّم المقدمة وصلب الموضوع والخاتمة كل على حدة، وحدد وسائل الجذب المستخدمة (قصص، أسئلة بلاغية، إحصائيات، فكاهة)، ونقاط القوة والتحسين اللفظية.\n\nأعد الإجابة بصيغة JSON صالحة فقط، بدون أي نص قبله أو بعده وبدون علامات كود، وبنفس هذا الهيكل بالضبط:\n{\n  \"verbal\": {\n    \"hesitations_count\": 0,\n    \"filler_words_examples\": [\"...\"],\n    \"language_accuracy_notes\": \"...\",\n    \"introduction_assessment\": \"...\",\n    \"body_assessment\": \"...\",\n    \"conclusion_assessment\": \"...\",\n    \"engagement_techniques\": \"...\",\n    \"strengths\": \"...\",\n    \"improvements\": \"...\"\n  },\n  \"nonverbal\": {\n    \"available\": false,\n    \"body_language_overview\": \"غير متاح (يتطلب تحليلاً بصرياً غير مفعّل في هذا الإعداد)\",\n    \"voice_pace_and_tone\": \"...\",\n    \"eye_contact_and_visual_distribution\": \"غير متاح (يتطلب تحليلاً بصرياً غير مفعّل في هذا الإعداد)\",\n    \"hand_gestures\": \"غير متاح (يتطلب تحليلاً بصرياً غير مفعّل في هذا الإعداد)\",\n    \"facial_expressions\": \"غير متاح (يتطلب تحليلاً بصرياً غير مفعّل في هذا الإعداد)\",\n    \"strengths\": \"...\",\n    \"improvements\": \"...\"\n  }\n}"
+            }
+          ]
+        },
+        "simplify": true,
+        "options": {
+          "instructions": "أنت خبير عالمي في تحليل الخطابة والتواصل بخبرة 20 عاماً في تدريب المتحدثين. أسلوبك دقيق ومبني على الأدلة النصية المتاحة فقط، ولا تخترع معلومات غير موجودة في النص.",
+          "textFormat": { "textOptions": { "type": "json_object" } },
+          "maxTokens": 4000,
+          "temperature": 0.4
+        }
+      }
+    },
+    {
+      "id": "b1fd55c7-6e21-4af4-b30b-345d50f1ac7f",
+      "name": "دمج نتائج التحليل",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, 0],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const j = $input.item.json;\nconst raw = j.content ?? j.text ?? j.output_text ?? j.response ?? (typeof j === 'string' ? j : JSON.stringify(j));\n\nlet parsed;\ntry {\n  const cleaned = String(raw).trim().replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  parsed = { parse_error: e.message, raw_text: String(raw) };\n}\n\nconst src = $('تجهيز الملف').item.json;\nconst transcriptJson = $('OpenAI - تفريغ النص').item.json;\nconst transcript = transcriptJson.text ?? transcriptJson.content ?? transcriptJson.transcript ?? '';\n\nreturn {\n  json: {\n    speakerName: src.speakerName,\n    speechType: src.speechType,\n    topic: src.topic,\n    notes: src.notes,\n    inputMode: src.inputMode,\n    inputModeLabel: src.inputModeLabel,\n    detectedMimeType: src.detectedMimeType,\n    transcript,\n    analysis: parsed,\n  },\n};"
+      }
+    },
+    {
+      "id": "c450d11b-9b9a-48a1-8f62-0c42dec07a86",
+      "name": "OpenAI - توليف التقرير النهائي",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [420, 0],
+      "parameters": {
+        "resource": "text",
+        "operation": "response",
+        "modelId": { "__rl": true, "mode": "id", "value": "gpt-4o" },
+        "responses": {
+          "values": [
+            {
+              "type": "text",
+              "role": "user",
+              "content": "=بيانات الخطيب:\nالاسم: {{ $json.speakerName }}\nنوع الخطاب: {{ $json.speechType }}\nالموضوع: {{ $json.topic }}\nملاحظات المتحدث: {{ $json.notes }}\nنمط المدخل: {{ $json.inputModeLabel }}\n\nنص الخطاب المفرّغ:\n{{ $json.transcript }}\n\nنتائج التحليل الأولي (JSON):\n{{ JSON.stringify($json.analysis) }}\n\nبناءً على ما سبق، اكتب تقويماً احترافياً بأسلوب داعم وإيجابي وبنّاء بالكامل، مناسب حتى لعضو يجرّب لأول مرة. أعد الإجابة بصيغة JSON صالحة فقط بدون أي نص خارجها وبدون علامات كود، بالمفاتيح التالية بالضبط:\n{\n  \"full_report\": \"تقرير كامل منسّق بعناوين واضحة (نظرة عامة، التحليل اللفظي، التحليل غير اللفظي أو ملاحظة عدم توفره، البصمة الأسلوبية، نقاط التميز، خطة التحسين، خلاصة تحفيزية)\",\n  \"strengths\": \"ملخص نقاط التميز في نقاط\",\n  \"improvements\": \"خطة تحسين وتطوير عملية في خطوات واضحة\",\n  \"style_signature\": \"وصف أسلوبي مميز مختصر بجملتين إلى ثلاث يلخّص بصمة الخطيب الفريدة في الإلقاء\"\n}"
+            }
+          ]
+        },
+        "simplify": true,
+        "options": {
+          "instructions": "أنت مدرّب خطابة عربي محترف بخبرة 20 عاماً. أسلوبك دائماً داعم وإيجابي وبنّاء ومحدد بأمثلة عملية، ولا تكون قاسياً أبداً حتى مع المبتدئين الجدد. تكتب دائماً بالعربية الفصحى الميسّرة.",
+          "textFormat": { "textOptions": { "type": "json_object" } },
+          "maxTokens": 4000,
+          "temperature": 0.6
+        }
+      }
+    },
+    {
+      "id": "d5f575a0-1f8a-4d89-bbba-f642f9885d31",
+      "name": "تجهيز بيانات الحفظ والعرض",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 0],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const genJ = $input.item.json;\nconst raw = genJ.content ?? genJ.text ?? genJ.output_text ?? genJ.response ?? (typeof genJ === 'string' ? genJ : JSON.stringify(genJ));\n\nlet finalReport;\ntry {\n  const cleaned = String(raw).trim().replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();\n  finalReport = JSON.parse(cleaned);\n} catch (e) {\n  finalReport = {\n    full_report: String(raw),\n    strengths: '',\n    improvements: '',\n    style_signature: '',\n  };\n}\n\nconst src = $('دمج نتائج التحليل').item.json;\n\nreturn {\n  json: {\n    speaker_name: src.speakerName,\n    speech_type: src.speechType,\n    topic: src.topic,\n    input_mode: src.inputMode,\n    detected_mime_type: src.detectedMimeType,\n    transcript: src.transcript || null,\n    verbal_analysis: (src.analysis && src.analysis.verbal) || src.analysis || {},\n    nonverbal_analysis: (src.analysis && src.analysis.nonverbal) || null,\n    style_signature: finalReport.style_signature || '',\n    strengths: finalReport.strengths || '',\n    improvements: finalReport.improvements || '',\n    full_report: finalReport.full_report || String(raw),\n    notes: src.notes,\n  },\n};"
+      }
+    },
+    {
+      "id": "7bb4ba01-d628-424c-b91a-4a08ff0aa7b0",
+      "name": "حفظ التقرير في Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [860, 0],
+      "parameters": {
+        "resource": "row",
+        "operation": "create",
+        "tableId": "speech_reports",
+        "dataToSend": "autoMapInputData",
+        "inputsToIgnore": ""
+      }
+    },
+    {
+      "id": "f7fdd795-0fe2-4e65-96cf-51f105dbbb6b",
+      "name": "عرض التقرير للمتحدث",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [1080, 0],
+      "webhookId": "65d67a8b-e38a-459a-8e0b-978c48d24b72",
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "text",
+        "completionTitle": "=✅ تقريرك جاهز يا {{ $('تجهيز بيانات الحفظ والعرض').item.json.speaker_name }}!",
+        "completionMessage": "={{ $('تجهيز بيانات الحفظ والعرض').item.json.full_report }}\n\n---\n🌟 نقاط التميز:\n{{ $('تجهيز بيانات الحفظ والعرض').item.json.strengths }}\n\n🚀 خطة التحسين والتطوير:\n{{ $('تجهيز بيانات الحفظ والعرض').item.json.improvements }}\n\n🎙️ بصمتك الأسلوبية الخاصة:\n{{ $('تجهيز بيانات الحفظ والعرض').item.json.style_signature }}"
+      }
+    }
+  ],
+  "connections": {
+    "استلام الخطاب": { "main": [[{ "node": "تجهيز الملف", "type": "main", "index": 0 }]] },
+    "تجهيز الملف": { "main": [[{ "node": "OpenAI - تفريغ النص", "type": "main", "index": 0 }]] },
+    "OpenAI - تفريغ النص": { "main": [[{ "node": "OpenAI - التحليل اللفظي وغير اللفظي", "type": "main", "index": 0 }]] },
+    "OpenAI - التحليل اللفظي وغير اللفظي": { "main": [[{ "node": "دمج نتائج التحليل", "type": "main", "index": 0 }]] },
+    "دمج نتائج التحليل": { "main": [[{ "node": "OpenAI - توليف التقرير النهائي", "type": "main", "index": 0 }]] },
+    "OpenAI - توليف التقرير النهائي": { "main": [[{ "node": "تجهيز بيانات الحفظ والعرض", "type": "main", "index": 0 }]] },
+    "تجهيز بيانات الحفظ والعرض": { "main": [[{ "node": "حفظ التقرير في Supabase", "type": "main", "index": 0 }]] },
+    "حفظ التقرير في Supabase": { "main": [[{ "node": "عرض التقرير للمتحدث", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1" }
+}
