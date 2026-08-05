@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>خطيب — تحليل الخطابة</title>
+<style>
+  :root {
+    --stage-950: #15110b;
+    --stage-900: #1b150e;
+    --stage-850: #221b13;
+    --stage-800: #2a2117;
+    --stage-700: #4a3c2c;
+    --spotlight-500: #e8a33d;
+    --spotlight-400: #f0b75c;
+    --voice-500: #4fb6a8;
+    --danger-500: #e0654f;
+    --text-100: #f3ead8;
+    --text-300: #cdbfa4;
+    --text-500: #8f7f66;
+    --radius-lg: 18px;
+    --radius-md: 12px;
+    --font-ui: "Segoe UI", Tahoma, "Dubai", "Noto Naskh Arabic", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--stage-950);
+    background-image:
+      radial-gradient(ellipse 60% 45% at 50% 0%, rgba(232,163,61,0.10), transparent 70%),
+      radial-gradient(ellipse 90% 60% at 50% 100%, rgba(0,0,0,0.5), transparent 60%);
+    color: var(--text-100);
+    font-family: var(--font-ui);
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    background: linear-gradient(180deg, var(--stage-850), var(--stage-900));
+    border-left: 1px solid var(--stage-700);
+    display: flex; flex-direction: column; padding: 20px 16px; gap: 20px; min-height: 0;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark {
+    width: 32px; height: 32px; border-radius: 9px; flex: none;
+    background: linear-gradient(150deg, var(--spotlight-400), var(--spotlight-500) 65%);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 10px rgba(232,163,61,.35);
+  }
+  .brand-mark svg { width: 18px; height: 18px; }
+  .brand-name { font-size: 16px; font-weight: 700; }
+  .brand-sub { font-size: 10.5px; color: var(--text-500); }
+  .roster-label { font-size: 10.5px; font-weight: 600; color: var(--text-500); letter-spacing: 1.1px; padding-inline: 4px; }
+  .roster { display: flex; flex-direction: column; gap: 6px; }
+  .agent-btn {
+    all: unset; cursor: pointer; display: flex; align-items: center; gap: 10px;
+    padding: 10px 11px; border-radius: var(--radius-md); border: 1px solid transparent; color: var(--text-300);
+  }
+  .agent-btn:hover { background: rgba(232,163,61,.08); }
+  .agent-btn:focus-visible { outline: 2px solid var(--spotlight-500); outline-offset: 2px; }
+  .agent-btn.active { background: rgba(232,163,61,.14); border-color: rgba(232,163,61,.35); color: var(--text-100); }
+  .agent-icon { width: 28px; height: 28px; border-radius: 8px; background: var(--stage-800); display:flex; align-items:center; justify-content:center; color: var(--spotlight-400); flex: none; }
+  .agent-btn.active .agent-icon { background: var(--spotlight-500); color: var(--stage-950); }
+  .agent-icon svg { width: 15px; height: 15px; }
+  .agent-title { font-size: 13px; font-weight: 600; display: block; }
+  .agent-desc { font-size: 10.5px; color: var(--text-500); }
+  .sidebar-footer {
+    margin-top: auto; padding: 11px; border-radius: var(--radius-md);
+    background: var(--stage-800); border: 1px solid var(--stage-700);
+    font-size: 11px; color: var(--text-500); line-height: 1.6;
+  }
+  .sidebar-footer b { color: var(--text-300); }
+
+  .stage { display: flex; flex-direction: column; min-width: 0; padding: 20px 24px; }
+  .stage-header { display:flex; align-items:center; justify-content:space-between; margin-bottom: 14px; }
+  .stage-header h1 { font-size: 18px; margin: 0; }
+  .reset-btn {
+    all: unset; cursor: pointer; font-size: 11.5px; color: var(--text-500);
+    padding: 6px 12px; border-radius: 999px; border: 1px solid var(--stage-700);
+  }
+  .reset-btn:hover { color: var(--text-100); border-color: var(--spotlight-500); }
+  .reset-btn:focus-visible { outline: 2px solid var(--spotlight-500); outline-offset: 2px; }
+
+  .chat-log {
+    flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+    padding: 6px 4px 18px;
+  }
+  .msg { display: flex; gap: 10px; max-width: 78%; }
+  .msg.bot { align-self: flex-start; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .avatar { width: 28px; height: 28px; border-radius: 8px; flex: none; display:flex; align-items:center; justify-content:center; }
+  .msg.bot .avatar { background: var(--spotlight-500); color: var(--stage-950); }
+  .msg.user .avatar { background: var(--stage-800); color: var(--voice-500); border: 1px solid var(--stage-700); }
+  .avatar svg { width: 15px; height: 15px; }
+  .bubble {
+    padding: 11px 14px; border-radius: var(--radius-md); font-size: 13.5px; line-height: 1.75;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .msg.bot .bubble { background: var(--stage-800); border: 1px solid var(--stage-700); border-top-right-radius: 4px; }
+  .msg.user .bubble { background: rgba(232,163,61,.16); border: 1px solid rgba(232,163,61,.3); border-top-left-radius: 4px; }
+  .bubble.report { max-width: 62ch; }
+  .bubble.error { background: rgba(224,101,79,.14); border-color: rgba(224,101,79,.35); }
+
+  .typing-dots { display: inline-flex; gap: 4px; align-items: center; }
+  .typing-dots span { width: 5px; height: 5px; border-radius: 50%; background: var(--text-500); animation: blink 1.2s infinite ease-in-out; }
+  .typing-dots span:nth-child(2) { animation-delay: .2s; }
+  .typing-dots span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    .typing-dots span, .rec-dot.live { animation: none; }
+  }
+
+  .composer { border-top: 1px solid var(--stage-700); padding-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .choice-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .choice-btn {
+    all: unset; cursor: pointer; padding: 9px 16px; border-radius: 999px;
+    background: var(--stage-800); border: 1px solid var(--stage-700); color: var(--text-100); font-size: 13px;
+  }
+  .choice-btn:hover { border-color: var(--spotlight-500); }
+  .choice-btn:focus-visible { outline: 2px solid var(--spotlight-500); outline-offset: 2px; }
+  .choice-btn.primary { background: var(--spotlight-500); color: var(--stage-950); border-color: var(--spotlight-500); font-weight: 700; }
+  .choice-btn.primary:hover { background: var(--spotlight-400); }
+
+  .text-row { display: flex; gap: 8px; }
+  .text-row input[type="text"] {
+    flex: 1; background: var(--stage-800); border: 1px solid var(--stage-700); color: var(--text-100);
+    border-radius: var(--radius-md); padding: 11px 13px; font-size: 13.5px; font-family: var(--font-ui);
+  }
+  .text-row input:focus { outline: none; border-color: var(--spotlight-500); }
+
+  .record-panel {
+    background: var(--stage-800); border: 1px solid var(--stage-700); border-radius: var(--radius-lg); padding: 16px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .record-video { width: 100%; max-width: 340px; border-radius: var(--radius-md); background: #000; display: none; align-self: center; }
+  .record-video.show { display: block; }
+  .record-status { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 13px; color: var(--text-300); text-align: center; }
+  .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger-500); flex: none; }
+  .rec-dot.live { animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  .record-controls { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .preview-audio, .preview-video { width: 100%; max-width: 340px; align-self: center; border-radius: var(--radius-md); }
+
+  .file-drop {
+    border: 1.5px dashed var(--stage-700); border-radius: var(--radius-md); padding: 20px; text-align: center;
+    font-size: 12.5px; color: var(--text-500); cursor: pointer;
+  }
+  .file-drop:hover { border-color: var(--spotlight-500); color: var(--text-300); }
+
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--stage-700); border-radius: 8px; }
+
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    .sidebar { flex-direction: row; align-items: center; border-left: none; border-bottom: 1px solid var(--stage-700); overflow-x: auto; }
+    .roster { flex-direction: row; }
+    .agent-desc, .sidebar-footer, .roster-label, .brand-sub { display: none; }
+    .msg { max-width: 92%; }
+  }
+</style>
+</head>
+<body>
+
+  <main class="stage">
+    <div class="stage-header">
+      <h1 id="agentHeading">محرك تحليل الخطابة</h1>
+      <button class="reset-btn" id="resetBtn">محادثة جديدة</button>
+    </div>
+    <div class="chat-log" id="chatLog"></div>
+    <div class="composer" id="composer"></div>
+  </main>
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#15110b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v4M9 22h6"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">خطيب</div>
+        <div class="brand-sub">استوديو تدريب الخطابة الذكي</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="roster-label" style="margin-bottom:8px;">الوكلاء</div>
+      <div class="roster" id="roster">
+        <button class="agent-btn active" data-agent="main">
+          <span class="agent-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>
+          <span><span class="agent-title">محرك تحليل الخطابة</span><span class="agent-desc">تسجيل مباشر أو رفع ملف</span></span>
+        </button>
+        <button class="agent-btn" data-agent="topic">
+          <span class="agent-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6M12 2l3 3M12 2 9 5"/><circle cx="12" cy="15" r="6"/><path d="M12 12v3l2 2"/></svg></span>
+          <span><span class="agent-title">مولّد الموضوع الارتجالي</span><span class="agent-desc">عبارة ارتجالية فورية</span></span>
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <b>خصوصية:</b> التسجيل يُرسل للتحليل ولا يُحفظ في أي مكان — فقط التقرير النهائي يُخزَّن في قاعدة البيانات.
+    </div>
+  </aside>
+
+<script>
+(function () {
+  "use strict";
+
+  var chatLog = document.getElementById("chatLog");
+  var composer = document.getElementById("composer");
+  var agentHeading = document.getElementById("agentHeading");
+  var resetBtn = document.getElementById("resetBtn");
+  var rosterButtons = document.querySelectorAll(".agent-btn");
+
+  var currentAgent = "main";
+  var answers = {};
+  var recState = { stream: null, recorder: null, chunks: [], blob: null, kind: null, timer: null, seconds: 0 };
+
+  var BOT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v4M9 22h6"/></svg>';
+  var USER_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>';
+
+  function el(tag, cls, html) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (html !== undefined) e.innerHTML = html;
+    return e;
+  }
+
+  function scrollToBottom() { chatLog.scrollTop = chatLog.scrollHeight; }
+
+  function addBotBubble(text, cls) {
+    var msg = el("div", "msg bot");
+    msg.appendChild(el("div", "avatar", BOT_ICON));
+    var bubble = el("div", "bubble" + (cls ? " " + cls : ""));
+    bubble.textContent = text;
+    msg.appendChild(bubble);
+    chatLog.appendChild(msg);
+    scrollToBottom();
+    return bubble;
+  }
+
+  function addTypingBubble() {
+    var msg = el("div", "msg bot");
+    msg.appendChild(el("div", "avatar", BOT_ICON));
+    msg.appendChild(el("div", "bubble", '<span class="typing-dots"><span></span><span></span><span></span></span>'));
+    chatLog.appendChild(msg);
+    scrollToBottom();
+    return msg;
+  }
+
+  function addUserBubble(text) {
+    var msg = el("div", "msg user");
+    msg.appendChild(el("div", "avatar", USER_ICON));
+    var bubble = el("div", "bubble");
+    bubble.textContent = text;
+    msg.appendChild(bubble);
+    chatLog.appendChild(msg);
+    scrollToBottom();
+  }
+
+  function clearComposer() { composer.innerHTML = ""; }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  /* ---------- submission through the same-origin proxy ---------- */
+
+  function submitToAgent(agent, fields) {
+    var fd = new FormData();
+    fields.forEach(function (f) {
+      if (f.file) fd.append(f.name, f.file, f.file.name || "recording.webm");
+      else fd.append(f.name, f.value == null ? "" : f.value);
+    });
+
+    return fetch("/api/submit?agent=" + encodeURIComponent(agent), { method: "POST", body: fd })
+      .then(function (res) { return res.text(); })
+      .then(function (text) {
+        var json = null;
+        try { json = JSON.parse(text); } catch (e) {}
+
+        if (json && json.proxyError) throw new Error(json.proxyError);
+        if (json && json.formSubmittedText) return json.formSubmittedText;
+        if (json && json.formWaitingUrl) return pollExecution(json.formWaitingUrl);
+        if (json && json.redirectURL) return "تم الإرسال. النتيجة هنا: " + json.redirectURL;
+        return text && text.trim() ? text.trim() : "تم إرسال الطلب بنجاح.";
+      });
+  }
+
+  function proxied(url) { return "/api/status?url=" + encodeURIComponent(url); }
+
+  function pollExecution(waitingUrl) {
+    var wUrl = new URL(waitingUrl);
+    var signature = wUrl.searchParams.get("signature");
+    var statusUrl = new URL(wUrl.href);
+    statusUrl.pathname = statusUrl.pathname.replace(/\/$/, "") + "/n8n-execution-status";
+    if (signature) statusUrl.searchParams.set("signature", signature);
+
+    var interval = 1500;
+    var deadline = Date.now() + 8 * 60 * 1000;
+
+    function tick() {
+      if (Date.now() > deadline) {
+        throw new Error("استغرق التحليل وقتاً أطول من المتوقع. راجع سجل التنفيذ في n8n.");
+      }
+      return sleep(interval)
+        .then(function () { return fetch(proxied(statusUrl.toString())); })
+        .then(function (r) { return r.text(); })
+        .then(function (raw) {
+          var t = raw.trim();
+
+          if (t === "success") {
+            return fetch(proxied(wUrl.toString()))
+              .then(function (r) { return r.text(); })
+              .then(function (html) {
+                var doc = new DOMParser().parseFromString(html, "text/html");
+                var header = doc.getElementById("submitted-header");
+                var content = doc.getElementById("submitted-content");
+                var parts = [];
+                if (header && header.textContent.trim()) parts.push(header.textContent.trim());
+                if (content && content.textContent.trim()) parts.push(content.textContent.trim());
+                return parts.length ? parts.join("\n\n") : "اكتمل التحليل بنجاح.";
+              });
+          }
+
+          if (["canceled", "crashed", "error", "null"].indexOf(t) !== -1) {
+            throw new Error("تعطّل تنفيذ الوركفلو أثناء المعالجة (" + t + ").");
+          }
+
+          interval = Math.round(interval * 1.15);
+          return tick();
+        });
+    }
+    return Promise.resolve().then(tick);
+  }
+
+  /* ---------- recording helpers ---------- */
+
+  function stopTracks() {
+    if (recState.stream) recState.stream.getTracks().forEach(function (t) { t.stop(); });
+    recState.stream = null;
+  }
+
+  function pickMime(kind) {
+    var candidates = kind === "video"
+      ? ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"]
+      : ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+    for (var i = 0; i < candidates.length; i++) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
+    }
+    return "";
+  }
+
+  function formatTimer(sec) {
+    var m = Math.floor(sec / 60), s = sec % 60;
+    return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function extFromMime(mime) {
+    if (mime.indexOf("mp4") !== -1) return "mp4";
+    return "webm";
+  }
+
+  /* ---------- main agent flow ---------- */
+
+  function startMainFlow() {
+    answers = {};
+    chatLog.innerHTML = "";
+    clearComposer();
+    addBotBubble("أهلاً! أنا وكيل تحليل الخطابة. راح نمشي خطوة خطوة. بدايةً، وش اسمك؟");
+    askName();
+  }
+
+  function askName() {
+    clearComposer();
+    var row = el("div", "text-row");
+    var input = el("input"); input.type = "text"; input.placeholder = "اكتب اسمك";
+    var btn = el("button", "choice-btn primary", "التالي");
+    row.appendChild(input); row.appendChild(btn);
+    composer.appendChild(row);
+    input.focus();
+
+    function go() {
+      var v = input.value.trim();
+      if (!v) return;
+      addUserBubble(v);
+      answers.name = v;
+      clearComposer();
+      addBotBubble("تشرّفنا يا " + v + "! وش نوع خطابك؟");
+      askType();
+    }
+    btn.addEventListener("click", go);
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter") go(); });
+  }
+
+  function askType() {
+    clearComposer();
+    var row = el("div", "choice-row");
+    ["ارتجالي", "معد", "مفتوح"].forEach(function (opt) {
+      var b = el("button", "choice-btn", opt);
+      b.addEventListener("click", function () {
+        addUserBubble(opt);
+        answers.type = opt;
+        clearComposer();
+        addBotBubble("تمام. عندك موضوع محدد؟ اكتبه، أو تجاوز إذا ما عندك.");
+        askTopic();
+      });
+      row.appendChild(b);
+    });
+    composer.appendChild(row);
+  }
+
+  function askTopic() {
+    clearComposer();
+    var row = el("div", "text-row");
+    var input = el("input"); input.type = "text"; input.placeholder = "موضوع الخطاب (اختياري)";
+    var skip = el("button", "choice-btn", "تجاوز");
+    var next = el("button", "choice-btn primary", "التالي");
+    row.appendChild(input); row.appendChild(skip); row.appendChild(next);
+    composer.appendChild(row);
+    input.focus();
+
+    function proceed(val) {
+      answers.topic = val;
+      addUserBubble(val ? val : "(بدون موضوع محدد)");
+      clearComposer();
+      addBotBubble("جاهز تسجّل الحين مباشرة، أو تفضّل ترفع ملف جاهز؟");
+      askSource();
+    }
+    skip.addEventListener("click", function () { proceed(""); });
+    next.addEventListener("click", function () { proceed(input.value.trim()); });
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter") proceed(input.value.trim()); });
+  }
+
+  function askSource() {
+    clearComposer();
+    var row = el("div", "choice-row");
+    var recVideo = el("button", "choice-btn primary", "🎥 سجّل فيديو الآن");
+    var recAudio = el("button", "choice-btn", "🎤 سجّل صوت فقط");
+    var upload = el("button", "choice-btn", "📁 ارفع ملف جاهز");
+    row.appendChild(recVideo); row.appendChild(recAudio); row.appendChild(upload);
+    composer.appendChild(row);
+
+    recVideo.addEventListener("click", function () { addUserBubble("سجّل فيديو الآن"); startRecordingFlow("video"); });
+    recAudio.addEventListener("click", function () { addUserBubble("سجّل صوت فقط"); startRecordingFlow("audio"); });
+    upload.addEventListener("click", function () { addUserBubble("ارفع ملف جاهز"); showUploadFlow(); });
+  }
+
+  function showUploadFlow() {
+    clearComposer();
+    var drop = el("div", "file-drop", "اضغط هنا لاختيار ملف صوتي أو مرئي");
+    var input = el("input"); input.type = "file";
+    input.accept = ".mp3,.wav,.m4a,.aac,.ogg,.mp4,.mov,.webm,.m4v";
+    input.style.display = "none";
+    drop.appendChild(input);
+    composer.appendChild(drop);
+
+    drop.addEventListener("click", function () { input.click(); });
+    input.addEventListener("change", function () {
+      if (!input.files || !input.files[0]) return;
+      var f = input.files[0];
+      answers.file = f;
+      addUserBubble("📁 " + f.name);
+      clearComposer();
+      addBotBubble("تمام، استلمت الملف. أي ملاحظات إضافية؟ اكتبها أو تجاوز.");
+      askNotes();
+    });
+  }
+
+  function startRecordingFlow(kind) {
+    clearComposer();
+    var panel = el("div", "record-panel");
+    var video = el("video", "record-video" + (kind === "video" ? " show" : ""));
+    video.autoplay = true; video.muted = true; video.playsInline = true;
+    var status = el("div", "record-status", '<span class="rec-dot"></span><span>اضغط "ابدأ التسجيل" وامنح إذن الكاميرا والمايك</span>');
+    var controls = el("div", "record-controls");
+    var startBtn = el("button", "choice-btn primary", "ابدأ التسجيل");
+    var backBtn = el("button", "choice-btn", "رجوع");
+    controls.appendChild(startBtn); controls.appendChild(backBtn);
+    panel.appendChild(video); panel.appendChild(status); panel.appendChild(controls);
+    composer.appendChild(panel);
+
+    backBtn.addEventListener("click", function () { stopTracks(); askSource(); });
+
+    startBtn.addEventListener("click", function () {
+      var constraints = kind === "video" ? { video: true, audio: true } : { audio: true };
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        status.innerHTML = "<span>متصفحك ما يدعم التسجيل المباشر. استخدم خيار رفع ملف جاهز.</span>";
+        return;
+      }
+
+      navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
+        recState.stream = stream;
+        recState.kind = kind;
+        if (kind === "video") video.srcObject = stream;
+
+        var mime = pickMime(kind);
+        recState.recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+        recState.chunks = [];
+        recState.recorder.ondataavailable = function (e) { if (e.data && e.data.size > 0) recState.chunks.push(e.data); };
+        recState.recorder.onstop = function () {
+          recState.blob = new Blob(recState.chunks, { type: mime || (kind === "video" ? "video/webm" : "audio/webm") });
+          stopTracks();
+          showRecordedPreview(kind);
+        };
+        recState.recorder.start();
+        recState.seconds = 0;
+        status.innerHTML = '<span class="rec-dot live"></span><span id="recTimerLabel">00:00 — جارٍ التسجيل</span>';
+        recState.timer = setInterval(function () {
+          recState.seconds++;
+          var lbl = document.getElementById("recTimerLabel");
+          if (lbl) lbl.textContent = formatTimer(recState.seconds) + " — جارٍ التسجيل";
+        }, 1000);
+
+        var stopBtn = el("button", "choice-btn primary", "إيقاف التسجيل");
+        controls.replaceChild(stopBtn, startBtn);
+        stopBtn.addEventListener("click", function () {
+          clearInterval(recState.timer);
+          if (recState.recorder.state !== "inactive") recState.recorder.stop();
+        });
+      }).catch(function (err) {
+        status.innerHTML = "";
+        var p = el("span");
+        p.textContent = "تعذّر الوصول للكاميرا أو المايك: " + err.message + ". تأكد من السماح بالإذن، أو استخدم رفع ملف جاهز.";
+        status.appendChild(p);
+      });
+    });
+  }
+
+  function showRecordedPreview(kind) {
+    clearComposer();
+    var wrap = el("div", "record-panel");
+    var player = kind === "video" ? el("video", "preview-video") : el("audio", "preview-audio");
+    player.controls = true;
+    player.src = URL.createObjectURL(recState.blob);
+    wrap.appendChild(player);
+
+    var row = el("div", "record-controls");
+    var retry = el("button", "choice-btn", "إعادة التسجيل");
+    var use = el("button", "choice-btn primary", "استخدام هذا التسجيل");
+    row.appendChild(retry); row.appendChild(use);
+    wrap.appendChild(row);
+    composer.appendChild(wrap);
+
+    retry.addEventListener("click", function () { recState.blob = null; startRecordingFlow(kind); });
+    use.addEventListener("click", function () {
+      var ext = extFromMime(recState.blob.type || "");
+      answers.file = new File([recState.blob], "recording." + ext, { type: recState.blob.type });
+      addUserBubble("🎬 تسجيل جاهز (" + formatTimer(recState.seconds) + ")");
+      clearComposer();
+      addBotBubble("ممتاز، استلمت التسجيل. أي ملاحظات إضافية؟ اكتبها أو تجاوز.");
+      askNotes();
+    });
+  }
+
+  function askNotes() {
+    clearComposer();
+    var row = el("div", "text-row");
+    var input = el("input"); input.type = "text"; input.placeholder = "ملاحظات إضافية (اختياري)";
+    var skip = el("button", "choice-btn", "تجاوز");
+    var next = el("button", "choice-btn primary", "إرسال للتحليل");
+    row.appendChild(input); row.appendChild(skip); row.appendChild(next);
+    composer.appendChild(row);
+    input.focus();
+
+    function proceed(val) {
+      answers.notes = val;
+      addUserBubble(val ? val : "(لا يوجد)");
+      clearComposer();
+      runMainSubmission();
+    }
+    skip.addEventListener("click", function () { proceed(""); });
+    next.addEventListener("click", function () { proceed(input.value.trim()); });
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter") proceed(input.value.trim()); });
+  }
+
+  function runMainSubmission() {
+    addBotBubble("جاري تفريغ الصوت وتحليل الخطاب... قد يستغرق دقيقة أو أكثر حسب طول التسجيل. لا تغلق الصفحة.");
+    var typingMsg = addTypingBubble();
+
+    var fields = [
+      { name: "field-0", value: answers.name },
+      { name: "field-1", value: answers.type },
+      { name: "field-2", value: answers.topic },
+      { name: "field-3", file: answers.file },
+      { name: "field-4", value: answers.notes }
+    ];
+
+    submitToAgent("main", fields).then(function (message) {
+      typingMsg.remove();
+      addBotBubble(message, "report");
+      clearComposer();
+      var again = el("button", "choice-btn primary", "تحليل خطاب جديد");
+      again.addEventListener("click", startMainFlow);
+      composer.appendChild(again);
+    }).catch(function (err) {
+      typingMsg.remove();
+      addBotBubble("صار خطأ أثناء التحليل: " + err.message, "error");
+      clearComposer();
+      var again = el("button", "choice-btn", "حاول مرة ثانية");
+      again.addEventListener("click", startMainFlow);
+      composer.appendChild(again);
+    });
+  }
+
+  /* ---------- topic agent flow ---------- */
+
+  function startTopicFlow() {
+    answers = {};
+    chatLog.innerHTML = "";
+    clearComposer();
+    addBotBubble("أهلاً! تبي عبارة ارتجالية تتحدث عنها؟ اختر تصنيفاً:");
+    askCategory();
+  }
+
+  function askCategory() {
+    clearComposer();
+    var row = el("div", "choice-row");
+    ["عام", "اجتماعي", "مهني ووظيفي", "تحفيزي", "تحدٍّ مفاجئ"].forEach(function (opt) {
+      var b = el("button", "choice-btn", opt);
+      b.addEventListener("click", function () {
+        addUserBubble(opt);
+        clearComposer();
+        runTopicSubmission(opt);
+      });
+      row.appendChild(b);
+    });
+    composer.appendChild(row);
+  }
+
+  function runTopicSubmission(category) {
+    var typingMsg = addTypingBubble();
+    submitToAgent("topic", [{ name: "field-0", value: category }]).then(function (message) {
+      typingMsg.remove();
+      addBotBubble(message, "report");
+      clearComposer();
+      var again = el("button", "choice-btn primary", "موضوع ثاني");
+      again.addEventListener("click", startTopicFlow);
+      composer.appendChild(again);
+    }).catch(function (err) {
+      typingMsg.remove();
+      addBotBubble("صار خطأ أثناء الطلب: " + err.message, "error");
+      clearComposer();
+      var again = el("button", "choice-btn", "حاول مرة ثانية");
+      again.addEventListener("click", startTopicFlow);
+      composer.appendChild(again);
+    });
+  }
+
+  /* ---------- agent switching ---------- */
+
+  function switchAgent(agent) {
+    stopTracks();
+    currentAgent = agent;
+    rosterButtons.forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-agent") === agent); });
+    if (agent === "main") {
+      agentHeading.textContent = "محرك تحليل الخطابة";
+      startMainFlow();
+    } else {
+      agentHeading.textContent = "مولّد الموضوع الارتجالي";
+      startTopicFlow();
+    }
+  }
+
+  rosterButtons.forEach(function (b) {
+    b.addEventListener("click", function () { switchAgent(b.getAttribute("data-agent")); });
+  });
+  resetBtn.addEventListener("click", function () { switchAgent(currentAgent); });
+
+  switchAgent("main");
+})();
+</script>
+</body>
+</html>
