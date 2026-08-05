@@ -1,0 +1,112 @@
+{
+  "name": "مولّد الموضوع الارتجالي",
+  "nodes": [
+    {
+      "id": "401619c2-f771-451c-8839-52982ad459d5",
+      "name": "نموذج طلب الموضوع",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [-460, 0],
+      "webhookId": "cb411441-972a-4b5e-b0bb-7d74bebc59bf",
+      "parameters": {
+        "formTitle": "🎤 مولّد موضوع ارتجالي",
+        "formDescription": "اختر تصنيف الموضوع (اختياري) واضغط الزر، وراح يجهّز لك النظام عبارة ارتجالية تتحدث عنها مباشرة.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "تصنيف الموضوع (اختياري)",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  { "option": "عام" },
+                  { "option": "اجتماعي" },
+                  { "option": "مهني ووظيفي" },
+                  { "option": "تحفيزي" },
+                  { "option": "تحدٍّ مفاجئ" }
+                ]
+              },
+              "requiredField": false
+            }
+          ]
+        },
+        "options": {
+          "buttonLabel": "أعطني موضوعاً",
+          "appendAttribution": false,
+          "customCss": ":root {\n  --font-family: 'Segoe UI', Tahoma, Arial, sans-serif;\n  --color-background: #212121;\n  --color-card-bg: #2f2f2f;\n  --color-card-border: #4b4b4b;\n  --color-header: #ececec;\n  --color-label: #b4b4b4;\n  --color-input-border: #565869;\n  --color-input-text: #ececec;\n  --color-input-bg: #303030;\n  --color-focus-border: #d97757;\n  --color-submit-btn-bg: #d97757;\n  --color-submit-btn-text: #ffffff;\n  --border-radius-card: 16px;\n  --border-radius-input: 10px;\n  --padding-card: 28px;\n  --container-width: 560px;\n}"
+        }
+      }
+    },
+    {
+      "id": "3c279e88-3ec1-41c6-8dc3-0c6c61a12fbb",
+      "name": "تجهيز التصنيف",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-240, 0],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const j = $input.item.json;\nreturn {\n  json: {\n    category: j['تصنيف الموضوع (اختياري)'] || 'عام',\n  },\n};"
+      }
+    },
+    {
+      "id": "376b5386-6753-4924-aeae-221c531fb50c",
+      "name": "OpenAI - توليد الموضوع",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [-20, 0],
+      "parameters": {
+        "resource": "text",
+        "operation": "response",
+        "modelId": { "__rl": true, "mode": "id", "value": "gpt-4o" },
+        "responses": {
+          "values": [
+            {
+              "type": "text",
+              "role": "user",
+              "content": "=أنت مدرّب خطابة عربي محترف بخبرة 20 سنة. ولّد عبارة أو سؤالاً ارتجالياً واحداً فقط (جملة أو جملتين كحد أقصى، بدون أي مقدمات أو شرح أو علامات تنصيص)، ليتحدث عنه شخص ارتجالياً لمدة دقيقة إلى دقيقتين. اجعله مناسباً لتصنيف: {{ $json.category }}. نوّع الأسلوب بين سؤال مباشر، أو موقف افتراضي، أو رأي خفيف قابل للنقاش — بدون إساءة أو حساسية دينية أو سياسية."
+            }
+          ]
+        },
+        "simplify": true,
+        "options": {
+          "instructions": "أنت مساعد متخصص فقط في توليد مواضيع خطابة ارتجالية قصيرة باللغة العربية الفصحى الميسّرة. أعد النص المطلوب فقط دون أي تعليق إضافي.",
+          "temperature": 0.9
+        }
+      }
+    },
+    {
+      "id": "5cee795c-12a7-4d06-a591-a8bcda7fc970",
+      "name": "تنسيق النتيجة",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [180, 0],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const j = $input.item.json;\nconst raw = j.content ?? j.text ?? j.response ?? (typeof j === 'string' ? j : JSON.stringify(j));\nconst topic = String(raw).trim().replace(/^\"|\"$/g, '');\n\nreturn {\n  json: {\n    topic,\n  },\n};"
+      }
+    },
+    {
+      "id": "6f511865-ddc2-40fa-a525-0ddf4bb760f1",
+      "name": "عرض الموضوع",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [400, 0],
+      "webhookId": "0427ed80-4a7b-4b32-a04f-703b028c7b86",
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "text",
+        "completionTitle": "🎤 موضوعك الارتجالي جاهز!",
+        "completionMessage": "={{ $json.topic }}\n\nخذ نفساً عميقاً ونظّم أفكارك سريعاً: مقدمة قصيرة، فكرة رئيسية أو فكرتين، وخاتمة تُلخّص رأيك.\n\nبعد ما تسجّل خطابك، افتح نموذج محرك تحليل الخطابة وارفع التسجيل مع كتابة هذا الموضوع في حقل موضوع الخطاب."
+      }
+    }
+  ],
+  "connections": {
+    "نموذج طلب الموضوع": { "main": [[{ "node": "تجهيز التصنيف", "type": "main", "index": 0 }]] },
+    "تجهيز التصنيف": { "main": [[{ "node": "OpenAI - توليد الموضوع", "type": "main", "index": 0 }]] },
+    "OpenAI - توليد الموضوع": { "main": [[{ "node": "تنسيق النتيجة", "type": "main", "index": 0 }]] },
+    "تنسيق النتيجة": { "main": [[{ "node": "عرض الموضوع", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1" }
+}
