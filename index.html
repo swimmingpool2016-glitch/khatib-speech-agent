@@ -138,6 +138,18 @@
 
   /* composer */
   .comp { border-top: 1px solid var(--line); padding-top: 11px; display: flex; flex-direction: column; gap: 9px; }
+  .acts { display: flex; gap: 9px; flex-wrap: wrap; }
+  .act {
+    all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 9px;
+    padding: 12px 20px; border-radius: 12px; font-size: 14px; font-weight: 700;
+    background: var(--accent); color: var(--bg); border: 1px solid var(--accent);
+  }
+  .act:hover { background: var(--accent-2); }
+  .act:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .act.alt { background: var(--raise); color: var(--ink); border-color: var(--line); }
+  .act.alt:hover { border-color: var(--accent); }
+  .act:disabled { opacity: .45; cursor: not-allowed; }
+  .act svg { width: 18px; height: 18px; }
   .bar { display: flex; gap: 8px; align-items: flex-end; }
   .bar textarea {
     flex: 1; resize: none; min-height: 44px; max-height: 130px;
@@ -201,19 +213,23 @@
   </div>
   <div class="log" id="log"></div>
   <div class="comp" id="comp">
+    <div id="extra"></div>
+    <div class="acts">
+      <button class="act" id="mic">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v4M9 22h6"/></svg>
+        سجّل خطابك بالكاميرا
+      </button>
+      <button class="act alt" id="up">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        ارفع تسجيلاً جاهزاً
+      </button>
+    </div>
     <div class="bar">
       <textarea id="input" rows="1" placeholder="اكتب أي شيء… اسأل عن الخطابة، أو اطلب تحليل خطابك"></textarea>
-      <button class="ico" id="mic" title="سجّل خطابك الآن">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v4M9 22h6"/></svg>
-      </button>
-      <button class="ico" id="up" title="ارفع تسجيلاً جاهزاً">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-      </button>
       <button class="ico send" id="send" title="إرسال">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4 3 11l7 3 3 7 7-17Z"/></svg>
       </button>
     </div>
-    <div id="extra"></div>
   </div>
 </main>
 
@@ -367,7 +383,7 @@
   });
 
   function greet() {
-    bot("أهلاً بك. أنا خطيب — مدرّب الخطابة. اسألني عن أي شيء في الإلقاء والتقديم والثقة أمام الجمهور.\n\nولما تجهز، اضغط 🎤 لتسجيل خطابك مباشرة أو ⬆ لرفع تسجيل جاهز، وأعطيك تقريراً بدرجات ومقاييس دقيقة.");
+    bot("أهلاً بك. أنا خطيب — مدرّب الخطابة. اسألني عن أي شيء في الإلقاء والتقديم والثقة أمام الجمهور.\n\nولما تجهز، اضغط زر «سجّل خطابك بالكاميرا» أو «ارفع تسجيلاً جاهزاً» تحت، وأعطيك تقريراً بدرجات ومقاييس دقيقة.");
   }
 
   /* ---------- report rendering ---------- */
@@ -539,13 +555,46 @@
     return Promise.resolve().then(tick);
   }
 
+  // إن لم يكن الاسم معروفاً، اطلبه هنا داخل المحادثة بدل رفض التحليل بصمت
   function analyze(file, secs) {
     var name = nm.value.trim();
     if (!name) {
-      bot("اكتب اسمك في الحقل على اليمين أولاً، عشان أقدر أتابع تطوّرك بين الجلسات.", true);
-      nm.focus();
+      askNameThen(function (n) {
+        nm.value = n;
+        try { localStorage.setItem("khatib_name", n); } catch (e) {}
+        runAnalysis(file, secs, n);
+      });
       return;
     }
+    runAnalysis(file, secs, name);
+  }
+
+  function askNameThen(next) {
+    extra.innerHTML = "";
+    bot("استلمت التسجيل. باقي شي واحد: وش اسمك؟ (أحتاجه لأتابع تطوّرك بين الجلسات)");
+    var p = el("div", "panel");
+    var row = el("div", "bar");
+    var i = el("input");
+    i.type = "text"; i.placeholder = "اكتب اسمك هنا";
+    i.style.cssText = "flex:1;background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:12px 13px;font-size:14px;font-family:var(--font);";
+    var ok = el("button", "act"); ok.textContent = "ابدأ التحليل";
+    row.appendChild(i); row.appendChild(ok);
+    p.appendChild(row);
+    extra.appendChild(p);
+    i.focus();
+
+    function go() {
+      var v = i.value.trim();
+      if (!v) { i.focus(); return; }
+      extra.innerHTML = "";
+      me(v);
+      next(v);
+    }
+    ok.addEventListener("click", go);
+    i.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); go(); } });
+  }
+
+  function runAnalysis(file, secs, name) {
     setBusy(true);
     bot("استلمت التسجيل. جاري التفريغ وحساب المقاييس ثم التقييم — قد يستغرق دقيقة. لا تغلق الصفحة.");
     var t = typing();
