@@ -326,10 +326,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
         ارفع تسجيلاً جاهزاً
       </button>
-      <button class="act spark" id="topic">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 4.6 4.6 1.9-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3Z"/><path d="M18 15.5 19 18l2.5 1L19 20l-1 2.5L17 20l-2.5-1 2.5-1 1-2.5Z"/></svg>
-        أعطني موضوعاً ارتجالياً
-      </button>
     </div>
     <div class="bar">
       <textarea id="input" rows="1" placeholder="اكتب أي شيء… اسأل بيان عن الخطابة والإلقاء والثقة أمام الجمهور"></textarea>
@@ -367,14 +363,13 @@
   </div>
 
   <div>
-    <div class="lbl">بياناتك للتحليل</div>
+    <div class="lbl">بياناتك</div>
     <div class="fields">
       <label class="fld"><span>الاسم</span><input id="nm" type="text" placeholder="اسمك" /></label>
-      <label class="fld"><span>نوع الخطاب</span>
-        <select id="tp"><option>مفتوح</option><option>ارتجالي</option><option>معد</option></select>
-      </label>
-      <label class="fld"><span>الموضوع (اختياري)</span><input id="sb" type="text" placeholder="موضوع الخطاب" /></label>
     </div>
+    <!-- نوع الخطاب والموضوع يُحدَّدان داخل تدفق التسجيل -->
+    <input id="tp" type="hidden" value="مفتوح" />
+    <input id="sb" type="hidden" value="" />
   </div>
 
   <div class="note">
@@ -393,7 +388,6 @@
   var sendBtn = document.getElementById("send");
   var micBtn = document.getElementById("mic");
   var upBtn = document.getElementById("up");
-  var topicBtn = document.getElementById("topic");
   var resetBtn = document.getElementById("reset");
   var nm = document.getElementById("nm"), tp = document.getElementById("tp"), sb = document.getElementById("sb");
   var liveRec = document.getElementById("liveRec");
@@ -432,29 +426,94 @@
     m.appendChild(el("div", "bub", '<span class="dots"><i></i><i></i><i></i></span>'));
     log.appendChild(m); down(); return m;
   }
-  function setBusy(v) { busy = v; sendBtn.disabled = v; micBtn.disabled = v; upBtn.disabled = v; topicBtn.disabled = v; }
+  function setBusy(v) { busy = v; sendBtn.disabled = v; micBtn.disabled = v; upBtn.disabled = v; }
 
-  /* ---------- موضوع ارتجالي عند الطلب ---------- */
   var TOPIC_URL = "https://cop202.app.n8n.cloud/webhook/bayan-topic";
 
-  topicBtn.addEventListener("click", function () {
-    if (busy) return;
+  /* ---------- تدفّق موجّه: النوع ← نمط الخطاب ← الموضوع ← التسجيل ---------- */
+
+  function panelWith(title, buttons) {
     extra.innerHTML = "";
     var p = el("div", "panel");
-    p.appendChild(el("div", "rst", "<span>اختر تصنيف الموضوع الارتجالي:</span>"));
+    p.appendChild(el("div", "rst", "<span>" + title + "</span>"));
     var row = el("div", "rowc");
-    ["عام", "اجتماعي", "مهني ووظيفي", "تحفيزي", "تحدٍّ مفاجئ"].forEach(function (cat) {
-      var b = el("button", "btn"); b.textContent = cat;
-      b.addEventListener("click", function () { extra.innerHTML = ""; getTopic(cat); });
-      row.appendChild(b);
+    buttons.forEach(function (b) {
+      var e = el("button", "btn" + (b.pri ? " pri" : ""));
+      e.textContent = b.label;
+      e.addEventListener("click", b.on);
+      row.appendChild(e);
     });
-    var x = el("button", "btn"); x.textContent = "إلغاء";
-    x.addEventListener("click", function () { extra.innerHTML = ""; });
-    row.appendChild(x);
-    p.appendChild(row); extra.appendChild(p);
+    p.appendChild(row);
+    extra.appendChild(p);
+    return p;
+  }
+
+  // ١) فيديو أم صوت؟
+  micBtn.addEventListener("click", function () {
+    if (busy) return;
+    panelWith("وش تفضّل تسجّل؟", [
+      { label: "🎥 فيديو", pri: true, on: function () { stepMode("video"); } },
+      { label: "🎤 صوت فقط", on: function () { stepMode("audio"); } },
+      { label: "إلغاء", on: function () { extra.innerHTML = ""; } }
+    ]);
   });
 
-  function getTopic(cat) {
+  // ٢) نمط الخطاب
+  function stepMode(kind) {
+    panelWith("وش نوع الخطاب اللي بتلقيه؟", [
+      { label: "معد مسبقاً", on: function () { tp.value = "معد"; sb.value = ""; startRec(kind); } },
+      { label: "ارتجالي", pri: true, on: function () { tp.value = "ارتجالي"; stepTopic(kind); } },
+      { label: "مفتوح", on: function () { tp.value = "مفتوح"; sb.value = ""; startRec(kind); } },
+      { label: "رجوع", on: function () { micBtn.click(); } }
+    ]);
+  }
+
+  // ٣) الموضوع الارتجالي
+  function stepTopic(kind) {
+    extra.innerHTML = "";
+    var p = el("div", "panel");
+    p.appendChild(el("div", "rst", "<span>خطاب ارتجالي — تبي موضوعاً من عندي؟ المدة المطلوبة دقيقة إلى دقيقتين.</span>"));
+    var row = el("div", "rowc");
+
+    var give = el("button", "act spark");
+    give.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 4.6 4.6 1.9-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3Z"/></svg> أعطني موضوعاً ارتجالياً';
+    give.addEventListener("click", function () { stepCategory(kind); });
+
+    var own = el("button", "btn"); own.textContent = "عندي موضوعي";
+    own.addEventListener("click", function () { stepOwnTopic(kind); });
+
+    var none = el("button", "btn"); none.textContent = "ابدأ بدون موضوع";
+    none.addEventListener("click", function () { sb.value = ""; startRec(kind); });
+
+    var back = el("button", "btn"); back.textContent = "رجوع";
+    back.addEventListener("click", function () { stepMode(kind); });
+
+    row.appendChild(give); row.appendChild(own); row.appendChild(none); row.appendChild(back);
+    p.appendChild(row); extra.appendChild(p);
+  }
+
+  function stepCategory(kind) {
+    var opts = ["عام", "اجتماعي", "مهني ووظيفي", "تحفيزي", "تحدٍّ مفاجئ"].map(function (cat) {
+      return { label: cat, on: function () { getTopic(cat, kind); } };
+    });
+    opts.push({ label: "رجوع", on: function () { stepTopic(kind); } });
+    panelWith("اختر تصنيف الموضوع:", opts);
+  }
+
+  function stepOwnTopic(kind) {
+    extra.innerHTML = "";
+    var p = el("div", "panel"), row = el("div", "bar");
+    var i = el("input"); i.type = "text"; i.placeholder = "اكتب موضوعك";
+    i.style.cssText = "flex:1;background:var(--ink-800);border:1px solid var(--line);color:var(--fg);border-radius:var(--r-m);padding:12px 13px;font-size:14px;font-family:var(--f)";
+    var ok = el("button", "act"); ok.textContent = "ابدأ التسجيل";
+    row.appendChild(i); row.appendChild(ok); p.appendChild(row); extra.appendChild(p); i.focus();
+    function go() { sb.value = i.value.trim(); startRec(kind); }
+    ok.addEventListener("click", go);
+    i.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); go(); } });
+  }
+
+  function getTopic(cat, kind) {
+    extra.innerHTML = "";
     me("أعطني موضوعاً ارتجالياً — " + cat);
     setBusy(true);
     var t = typing();
@@ -468,27 +527,29 @@
         var topic = (j && j.topic) || (raw || "").trim();
         if (!topic) throw new Error("لم يصل موضوع.");
         t.remove();
-        showTopic(topic);
+        sb.value = topic;
+        showTopic(topic, kind);
       })
       .catch(function (e) { t.remove(); bot("تعذّر توليد الموضوع: " + e.message, true); })
       .then(function () { setBusy(false); });
   }
 
-  function showTopic(topic) {
+  function showTopic(topic, kind) {
     var m = el("div", "m bot wide"); m.appendChild(el("div", "av", BOT));
     var box = el("div", "rep");
     var card = el("div", "card");
-    card.style.borderColor = "rgba(56,189,248,.4)";
+    card.style.borderColor = "rgba(56,189,248,.45)";
     put(card, "h3", null, "موضوعك الارتجالي");
     var q = put(card, "div", null, topic);
     q.style.cssText = "font-size:19px;font-weight:700;line-height:1.7;color:var(--fg)";
-    put(card, "div", "fsum", "خذ نفساً عميقاً ورتّب أفكارك: مقدمة قصيرة، فكرة أو فكرتين بمثال، وخاتمة تلخّص رأيك. ثم اضغط «سجّل خطابك بالكاميرا».");
+    put(card, "div", "fsum", "رتّب أفكارك سريعاً: مقدمة قصيرة، فكرة أو فكرتين بمثال، وخاتمة تلخّص رأيك. المدة المطلوبة دقيقة إلى دقيقتين.");
     box.appendChild(card); m.appendChild(box);
     log.appendChild(m); down();
 
-    // نضع الموضوع تلقائياً في حقل الموضوع ونضبط النوع على ارتجالي
-    sb.value = topic;
-    tp.value = "ارتجالي";
+    panelWith("جاهز؟", [
+      { label: "▶ ابدأ التسجيل", pri: true, on: function () { startRec(kind || "video"); } },
+      { label: "موضوع غيره", on: function () { stepCategory(kind); } }
+    ]);
   }
 
   /* ================= chat ================= */
@@ -525,7 +586,7 @@
     log.innerHTML = ""; extra.innerHTML = ""; greet();
   });
   function greet() {
-    bot("أهلاً بك، أنا بيان — مدرّب الخطابة.\n\nاسألني عن أي شيء في الإلقاء والتقديم والثقة أمام الجمهور.\n\nما عندك موضوع؟ اضغط «أعطني موضوعاً ارتجالياً» وأعطيك عبارة تتكلم عنها فوراً.\nجاهز؟ اضغط «سجّل خطابك بالكاميرا» أو «ارفع تسجيلاً جاهزاً» وأعطيك تقريراً بدرجاتك وكلمات الحشو التي كررتها وخطة تدريب.");
+    bot("أهلاً بك، أنا بيان — مدرّب الخطابة.\n\nاسألني عن أي شيء في الإلقاء والتقديم والثقة أمام الجمهور.\n\nولما تجهز، اضغط «سجّل خطابك بالكاميرا» وأمشي معك خطوة بخطوة: فيديو أو صوت، ثم نوع الخطاب، وإن اخترت الارتجالي أعطيك موضوعاً تتكلم عنه فوراً.");
   }
 
   /* ================= report ================= */
@@ -812,11 +873,21 @@
     if (!picker.files || !picker.files[0]) return;
     var f = picker.files[0]; picker.value = "";
     me("⬆ " + f.name + " (" + (f.size / 1048576).toFixed(1) + " ميجا)");
+    panelWith("وش نوع هذا الخطاب؟", [
+      { label: "معد مسبقاً", on: function () { tp.value = "معد"; runUpload(f); } },
+      { label: "ارتجالي", pri: true, on: function () { tp.value = "ارتجالي"; runUpload(f); } },
+      { label: "مفتوح", on: function () { tp.value = "مفتوح"; runUpload(f); } }
+    ]);
+  });
+
+  function runUpload(f) {
+    extra.innerHTML = "";
+    sb.value = "";
     setBusy(true);
     dur(f).then(function (s) { return prep(f, s); })
       .then(function (r) { setBusy(false); analyze(r.file, r.secs); })
       .catch(function () { setBusy(false); });
-  });
+  }
   function dur(file) {
     return new Promise(function (res) {
       var v = document.createElement(/^video\//.test(file.type) ? "video" : "audio");
@@ -838,22 +909,6 @@
   }
   function clk(s) { var m = Math.floor(s / 60), x = s % 60; return (m < 10 ? "0" : "") + m + ":" + (x < 10 ? "0" : "") + x; }
 
-  micBtn.addEventListener("click", function () {
-    if (busy) return;
-    extra.innerHTML = "";
-    var p = el("div", "panel");
-    p.appendChild(el("div", "rst", "<span>وش تفضّل تسجّل؟</span>"));
-    var q = el("div", "rowc");
-    var bv = el("button", "btn pri"); bv.textContent = "🎥 فيديو";
-    var ba = el("button", "btn"); ba.textContent = "🎤 صوت فقط";
-    var bx = el("button", "btn"); bx.textContent = "إلغاء";
-    q.appendChild(bv); q.appendChild(ba); q.appendChild(bx); p.appendChild(q);
-    extra.appendChild(p);
-    bx.addEventListener("click", function () { extra.innerHTML = ""; });
-    bv.addEventListener("click", function () { startRec("video"); });
-    ba.addEventListener("click", function () { startRec("audio"); });
-  });
-
   function startRec(kind) {
     extra.innerHTML = "";
     var p = el("div", "panel");
@@ -868,7 +923,7 @@
     bk.addEventListener("click", function () {
       if (rec.timer) clearInterval(rec.timer);
       liveRec.classList.remove("on");
-      stopTracks(); extra.innerHTML = "";
+      stopTracks(); stepMode(kind);
     });
 
     go.addEventListener("click", function () {
