@@ -634,9 +634,13 @@
   picker.addEventListener("change", function () {
     if (!picker.files || !picker.files[0]) return;
     var f = picker.files[0];
-    me("⬆ " + f.name);
-    dur(f).then(function (s) { analyze(f, s); });
+    me("⬆ " + f.name + " (" + (f.size / 1048576).toFixed(1) + " ميجا)");
     picker.value = "";
+    setBusy(true);
+    dur(f)
+      .then(function (s) { return prepareForUpload(f, s); })
+      .then(function (r) { setBusy(false); analyze(r.file, r.secs); })
+      .catch(function () { setBusy(false); });
   });
 
   function dur(file) {
@@ -649,6 +653,89 @@
       v.onerror = function () { fin(null); };
       setTimeout(function () { fin(null); }, 6000);
       v.src = u;
+    });
+  }
+
+  /* ---------- keep the upload under Vercel's 4.5 MB function limit ----------
+     التحليل صوتي بالكامل، فنستخرج الصوت فقط ونحوّله إلى WAV أحادي 16 كيلوهرتز.
+     هذا يقلّص الحجم عشرات المرات ويحافظ على الجودة التي يحتاجها التفريغ.        */
+
+  var MAX_BYTES = 4 * 1024 * 1024;
+  var TARGET_HZ = 16000;
+  var MAX_SECONDS = 130; // 16kHz mono 16-bit ≈ 32 KB/s → يبقى تحت السقف
+
+  function encodeWav(samples, rate) {
+    var len = samples.length;
+    var buf = new ArrayBuffer(44 + len * 2);
+    var v = new DataView(buf);
+    function str(off, s) { for (var i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); }
+    str(0, "RIFF"); v.setUint32(4, 36 + len * 2, true); str(8, "WAVE"); str(12, "fmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
+    v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    str(36, "data"); v.setUint32(40, len * 2, true);
+    var o = 44;
+    for (var i = 0; i < len; i++) {
+      var x = Math.max(-1, Math.min(1, samples[i]));
+      v.setInt16(o, x < 0 ? x * 0x8000 : x * 0x7fff, true);
+      o += 2;
+    }
+    return new Blob([buf], { type: "audio/wav" });
+  }
+
+  function shrinkToAudio(file) {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!AC || !OAC) return Promise.reject(new Error("متصفحك لا يدعم معالجة الصوت."));
+
+    return file.arrayBuffer()
+      .then(function (ab) {
+        var ctx = new AC();
+        return ctx.decodeAudioData(ab).then(function (d) {
+          try { ctx.close(); } catch (e) {}
+          return d;
+        }, function (e) {
+          try { ctx.close(); } catch (e2) {}
+          throw new Error("تعذّر قراءة الصوت من هذا الملف.");
+        });
+      })
+      .then(function (decoded) {
+        var full = decoded.duration;
+        var use = Math.min(full, MAX_SECONDS);
+        var off = new OAC(1, Math.max(1, Math.ceil(use * TARGET_HZ)), TARGET_HZ);
+        var src = off.createBufferSource();
+        src.buffer = decoded;
+        src.connect(off.destination);
+        src.start(0);
+        return off.startRendering().then(function (r) {
+          return {
+            blob: encodeWav(r.getChannelData(0), TARGET_HZ),
+            duration: Math.round(full),
+            trimmed: full > MAX_SECONDS
+          };
+        });
+      });
+  }
+
+  // يرجّع ملفاً جاهزاً للرفع مهما كان حجم/نوع المصدر
+  function prepareForUpload(file, knownSecs) {
+    if (file.size <= MAX_BYTES && /^audio\//.test(file.type || "")) {
+      return Promise.resolve({ file: file, secs: knownSecs, note: null });
+    }
+    var note = bot("جاري استخراج المسار الصوتي وضغطه قبل الإرسال…");
+    return shrinkToAudio(file).then(function (r) {
+      var msg = "تم الضغط: " + (r.blob.size / 1048576).toFixed(2) + " ميجا.";
+      if (r.trimmed) msg += " التسجيل أطول من الحد، فحُلّل أول " + Math.floor(MAX_SECONDS / 60) + " دقيقة و" + (MAX_SECONDS % 60) + " ثانية منه.";
+      note.textContent = msg;
+      return {
+        file: new File([r.blob], "speech.wav", { type: "audio/wav" }),
+        secs: r.trimmed ? MAX_SECONDS : (knownSecs || r.duration),
+        note: msg
+      };
+    }).catch(function (e) {
+      note.textContent = "تعذّر ضغط الملف: " + e.message + " — جرّب رفع ملف صوتي أقصر.";
+      note.parentNode.querySelector(".bub") && note.classList.add("bad");
+      throw e;
     });
   }
 
@@ -705,15 +792,40 @@
         .then(function (s) {
           rec.stream = s; rec.kind = kind;
           if (kind === "video") cam.srcObject = s;
+
           var mt = mime(kind);
           rec.recorder = mt ? new MediaRecorder(s, { mimeType: mt }) : new MediaRecorder(s);
           rec.chunks = [];
           rec.recorder.ondataavailable = function (e) { if (e.data && e.data.size) rec.chunks.push(e.data); };
+
+          // مسجّل صوتي منفصل بمعدل بت منخفض — هذا وحده ما يُرسل للتحليل،
+          // فيبقى الحجم أقل من ميجا مهما طال التسجيل، والفيديو يبقى للمعاينة فقط.
+          rec.aChunks = [];
+          rec.aRecorder = null;
+          var aTracks = s.getAudioTracks();
+          if (aTracks.length) {
+            var aMime = mime("audio");
+            try {
+              rec.aRecorder = new MediaRecorder(new MediaStream(aTracks),
+                aMime ? { mimeType: aMime, audioBitsPerSecond: 32000 } : { audioBitsPerSecond: 32000 });
+              rec.aRecorder.ondataavailable = function (e) { if (e.data && e.data.size) rec.aChunks.push(e.data); };
+            } catch (e) { rec.aRecorder = null; }
+          }
+
+          var pending = rec.aRecorder ? 2 : 1;
+          function partDone() { if (--pending === 0) { stopTracks(); preview(kind); } }
+
           rec.recorder.onstop = function () {
             rec.blob = new Blob(rec.chunks, { type: mt || (kind === "video" ? "video/webm" : "audio/webm") });
-            stopTracks();
-            preview(kind);
+            partDone();
           };
+          if (rec.aRecorder) {
+            rec.aRecorder.onstop = function () {
+              rec.audioBlob = new Blob(rec.aChunks, { type: rec.aRecorder.mimeType || "audio/webm" });
+              partDone();
+            };
+            rec.aRecorder.start();
+          }
           rec.recorder.start();
           rec.secs = 0;
           st.innerHTML = '<span class="rd on"></span><span id="tm">00:00 — جارٍ التسجيل</span>';
@@ -726,6 +838,7 @@
           row.replaceChild(sp, go);
           sp.addEventListener("click", function () {
             clearInterval(rec.timer);
+            if (rec.aRecorder && rec.aRecorder.state !== "inactive") rec.aRecorder.stop();
             if (rec.recorder.state !== "inactive") rec.recorder.stop();
           });
         })
@@ -749,13 +862,23 @@
     p.appendChild(row);
     extra.appendChild(p);
 
-    again.addEventListener("click", function () { rec.blob = null; startRec(kind); });
+    again.addEventListener("click", function () { rec.blob = null; rec.audioBlob = null; startRec(kind); });
     use.addEventListener("click", function () {
-      var ext = (rec.blob.type || "").indexOf("mp4") !== -1 ? "mp4" : "webm";
-      var f = new File([rec.blob], "speech." + ext, { type: rec.blob.type });
-      me("🎬 تسجيل (" + clk(rec.secs) + ")");
+      // نرسل المسار الصوتي المضغوط فقط — الفيديو ثقيل ولا يستخدمه التحليل
+      var send = rec.audioBlob && rec.audioBlob.size ? rec.audioBlob : rec.blob;
+      var ext = (send.type || "").indexOf("mp4") !== -1 ? "mp4" : "webm";
+      var f = new File([send], "speech." + ext, { type: send.type || "audio/webm" });
+      me("🎬 تسجيل (" + clk(rec.secs) + " · " + (f.size / 1048576).toFixed(2) + " ميجا)");
       extra.innerHTML = "";
-      analyze(f, rec.secs);
+
+      if (f.size > MAX_BYTES) {
+        setBusy(true);
+        prepareForUpload(f, rec.secs)
+          .then(function (r) { setBusy(false); analyze(r.file, r.secs); })
+          .catch(function () { setBusy(false); });
+      } else {
+        analyze(f, rec.secs);
+      }
     });
   }
 
