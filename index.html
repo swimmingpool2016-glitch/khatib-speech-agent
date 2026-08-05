@@ -512,9 +512,12 @@
     log.appendChild(m); down();
   }
 
-  /* ================= size guard (Vercel 4.5MB) ================= */
+  /* ================= size guard =================
+     التحليل يذهب من المتصفح إلى المحرك مباشرة (CORS مفعّل)، فلا ينطبق عليه
+     سقف دوال Vercel لا في الحجم ولا في الزمن. نضغط فقط الملفات الكبيرة جداً. */
 
-  var MAX_BYTES = 4 * 1024 * 1024, HZ = 16000, MAX_SEC = 130;
+  var ANALYZE_URL = "https://cop202.app.n8n.cloud/webhook/bayan-analyze";
+  var MAX_BYTES = 8 * 1024 * 1024, HZ = 16000, MAX_SEC = 300;
 
   function wav(samples, rate) {
     var len = samples.length, buf = new ArrayBuffer(44 + len * 2), v = new DataView(buf);
@@ -590,11 +593,14 @@
     fd.append("duration", secs ? String(secs) : "");
     fd.append("file", file, file.name || "speech.webm");
 
-    fetch("/api/submit?agent=main", { method: "POST", body: fd })
-      .then(function (r) { return r.text(); })
+    // مباشرة إلى المحرك — بدون وسيط، فلا سقف زمني ولا سقف حجم
+    fetch(ANALYZE_URL, { method: "POST", body: fd })
+      .then(function (r) {
+        if (!r.ok) throw new Error("المحرك رد بالرمز " + r.status + ". راجع سجل التنفيذ في n8n.");
+        return r.text();
+      })
       .then(function (raw) {
         var j = null; try { j = JSON.parse(raw); } catch (e) {}
-        if (j && j.proxyError) throw new Error(j.proxyError);
         if (j && j.message && !j.full_report) throw new Error(j.message);
         var rep = (j && j.full_report) || (raw || "").trim();
         if (!rep) throw new Error("لم يصل تقرير من المحرك.");
